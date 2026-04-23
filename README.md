@@ -201,6 +201,195 @@ output/
 
 ---
 
+## 🤖 作为 AI Agent Skill 使用
+
+本项目可以作为 **AI Agent Skill** 集成到各类 AI 助手平台（如 WorkBuddy、CodeBuddy 等），实现一键式游戏策划案生成。
+
+### Skill 安装方式
+
+#### 方式一：用户级安装（推荐）
+
+将本 Skill 安装到用户目录，所有项目均可使用：
+
+```bash
+# 复制到用户 Skill 目录
+mkdir -p ~/.workbuddy/skills/game-imitation-designer/
+cp -r GameDocGenSkill/* ~/.workbuddy/skills/game-imitation-designer/
+```
+
+#### 方式二：项目级安装
+
+仅当前项目可用：
+
+```bash
+# 复制到项目 .workbuddy/skills/ 目录
+mkdir -p .workbuddy/skills/game-imitation-designer/
+cp -r GameDocGenSkill/* .workbuddy/skills/game-imitation-designer/
+```
+
+### 输入目录规范
+
+使用 Skill 时需按以下结构准备输入文件：
+
+```
+project-root/
+├── input/                      # 输入素材目录（必须）
+│   ├── screenshots/            # 游戏截图（推荐）
+│   │   ├── main_ui.png
+│   │   ├── battle_scene.png
+│   │   └── reward_popup.png
+│   └── video/                  # 游戏视频（可选）
+│       └── gameplay_demo.mp4
+│
+├── templates/                  # 策划案模板目录（必须）
+│   ├── 【Release】xxx.xlsx    # Release版本策划案模板
+│   └── 【策划案】xxx.xlsx     # 常规策划案模板
+│
+├── output/                     # 输出目录（自动生成）
+│   └── 功能名称策划案/
+│       ├── README.md
+│       ├── 主界面.md
+│       └── images/
+│
+└── work/                       # 工作目录（自动生成）
+    ├── template_profile.json
+    ├── screenshots_index.json
+    └── analysis_results.json
+```
+
+### 在 OpenClaw 中使用
+
+#### 触发词
+
+在 OpenClaw 中，使用以下关键词触发本 Skill：
+
+- `游戏策划案生成`
+- `根据截图写策划案`
+- `分析游戏视频生成策划案`
+- `仿写策划案`
+- `游戏功能拆解`
+- `像素级模仿`
+
+#### 使用示例
+
+**示例 1：基础使用**
+
+> 用户：根据我放在 input 目录下的截图，帮我写一份活动策划案
+
+OpenClaw 会自动：
+1. 扫描 `templates/` 目录解析策划案模板
+2. 分析 `input/screenshots/` 下的截图
+3. 生成标准化 Markdown 策划案到 `output/` 目录
+
+**示例 2：指定模板**
+
+> 用户：参考 Release 版本的模板格式，分析 input/video/demo.mp4 生成策划案
+
+**示例 3：完整流程**
+
+> 用户：我上传了一个新游戏的录屏和几张关键界面截图，帮我仿写一份完整的策划案，参考我 templates 目录下的历史模板
+
+### 在 CodeBuddy 中使用
+
+```typescript
+// 在 Agent 配置中使用本 Skill
+import { loadSkill } from '@tencent-ai/agent-sdk';
+
+const gameDesignSkill = await loadSkill('game-imitation-designer');
+
+// 执行策划案生成
+const result = await gameDesignSkill.execute({
+  inputDir: './input',
+  templatesDir: './templates',
+  outputDir: './output',
+  options: {
+    extractKeyframes: true,      // 从视频提取关键帧
+    deduplicateScreenshots: true, // 截图去重
+    mergeTemplates: true,        // 合并多模板
+  }
+});
+
+console.log(`已生成策划案: ${result.outputPath}`);
+```
+
+### 在其他 AI Agent 平台使用
+
+#### 通用集成方式
+
+1. **准备环境**
+   ```bash
+   pip install pillow pandas openpyxl python-docx imagehash
+   # 如需视频处理：安装 FFmpeg
+   ```
+
+2. **调用脚本**
+   ```python
+   # 完整流水线
+   from scripts.template_parser import parse_templates, merge_profiles
+   from scripts.video_processor import extract_keyframes, copy_screenshots
+   from scripts.game_analyzer import generate_design_docs
+   from scripts.utils import ensure_dir, write_json
+   import os
+
+   # 准备目录
+   INPUT_DIR = "input"
+   TEMPLATES_DIR = "templates"
+   OUTPUT_DIR = "output"
+   WORK_DIR = "work"
+
+   ensure_dir(WORK_DIR)
+   ensure_dir(OUTPUT_DIR)
+
+   # Phase 1: 预处理
+   profiles = parse_templates(TEMPLATES_DIR)
+   merged = merge_profiles(profiles)
+   write_json(merged.to_dict(), f"{WORK_DIR}/template_profile.json")
+
+   # 处理视频截图
+   frames = []
+   video_dir = os.path.join(INPUT_DIR, "video")
+   if os.path.exists(video_dir):
+       for video in os.listdir(video_dir):
+           if video.endswith(('.mp4', '.mov', '.avi')):
+               frames.extend(extract_keyframes(
+                   os.path.join(video_dir, video),
+                   f"{WORK_DIR}/screenshots/"
+               ))
+
+   # 复制用户截图
+   screenshot_dir = os.path.join(INPUT_DIR, "screenshots")
+   if os.path.exists(screenshot_dir):
+       frames.extend(copy_screenshots(screenshot_dir, f"{WORK_DIR}/screenshots/"))
+
+   write_json({"screenshots": [f.path for f in frames]}, f"{WORK_DIR}/screenshots_index.json")
+
+   # Phase 2: 视觉分析（由 AI Agent 完成）
+   # Agent 读取截图，输出 analysis_results.json
+
+   # Phase 3: 文档生成
+   generated = generate_design_docs(
+       template_profile_path=f"{WORK_DIR}/template_profile.json",
+       analysis_results_path=f"{WORK_DIR}/analysis_results.json",
+       output_dir=OUTPUT_DIR,
+   )
+   ```
+
+### Skill 配置参数
+
+| 参数 | 类型 | 默认值 | 说明 |
+|------|------|--------|------|
+| `inputDir` | string | `"input"` | 输入素材目录 |
+| `templatesDir` | string | `"templates"` | 模板文件目录 |
+| `outputDir` | string | `"output"` | 输出策划案目录 |
+| `workDir` | string | `"work"` | 中间文件工作目录 |
+| `extractKeyframes` | boolean | `true` | 是否从视频提取关键帧 |
+| `sceneThreshold` | float | `0.3` | 场景变化敏感度 |
+| `maxFrames` | int | `50` | 每视频最大提取帧数 |
+| `deduplicateScreenshots` | boolean | `true` | 是否对截图去重 |
+| `mergeTemplates` | boolean | `true` | 是否合并多模板结构 |
+
+---
+
 ## 🛠️ 模块详解
 
 ### 1. Template Parser (`template_parser.py`)
@@ -418,7 +607,6 @@ min_interval=0.5
 如有问题或建议，欢迎通过以下方式联系：
 
 - 提交 [GitHub Issue](../../issues)
-- 发送邮件至：your.email@example.com
 
 ---
 
